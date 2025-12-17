@@ -1,4 +1,4 @@
-import { QuizQuestion } from "../model/quiz.entity.js";
+import { QuizQuestion } from "./quiz.entity.js";
 
 const QUESTIONS = [
   new QuizQuestion({

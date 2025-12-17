@@ -1,8 +1,8 @@
-import { quizService } from "../service/quiz.service.js";
-import { QuizAnswerRequestDTO } from "../dtos/quiz-answer.request.dto.js";
-import { QuizStartResponseDTO } from "../dtos/quiz-start.response.dto.js";
-import { QuizAnswerResponseDTO } from "../dtos/quiz-answer.response.dto.js";
-import { jsonResponse } from "../../../shared/utils/response.util.js";
+import { quizService } from "./quiz.service.js";
+import { QuizAnswerRequestDTO } from "./dtos/quiz-answer.request.dto.js";
+import { QuizStartResponseDTO } from "./dtos/quiz-start.response.dto.js";
+import { QuizAnswerResponseDTO } from "./dtos/quiz-answer.response.dto.js";
+import { jsonResponse } from "../../shared/utils/response.util.js";
 
 export const quizController = {
   start() {
