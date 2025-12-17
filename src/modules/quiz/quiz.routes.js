@@ -1,4 +1,4 @@
-import { quizController } from "../controller/quiz.controller.js";
+import { quizController } from "./quiz.controller.js";
 
 export const quizRoutes = [
   {

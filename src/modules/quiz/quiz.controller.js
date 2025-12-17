@@ -5,13 +5,13 @@ import { QuizAnswerResponseDTO } from "./dtos/quiz-answer.response.dto.js";
 import { jsonResponse } from "../../shared/utils/response.util.js";
 
 export const quizController = {
-  start() {
-    const question = quizService.getFirstQuestion();
+  async start() {
+    const question = await quizService.createInitialQuestion();
 
     const responseDTO = new QuizStartResponseDTO({
-      id: question.id,
-      text: question.text,
-      options: question.options
+      question: question.toJSON(),
+      initialScore: 0,
+      inferredRiskLevel: question.riskLevel
     });
 
     return jsonResponse(responseDTO);
@@ -21,13 +21,12 @@ export const quizController = {
     const body = await request.json();
     const requestDTO = new QuizAnswerRequestDTO(body);
 
-    const nextQuestion = quizService.getNextQuestion(requestDTO);
+    const serviceResponse = await quizService.processAnswer(requestDTO);
 
     const responseDTO = new QuizAnswerResponseDTO({
-      id: nextQuestion.id,
-      text: nextQuestion.text,
-      options: nextQuestion.options,
-      riskLevel: nextQuestion.level
+      nextQuestion: serviceResponse.nextQuestion.toJSON(),
+      updatedScore: serviceResponse.updatedScore,
+      inferredRiskLevel: serviceResponse.inferredRiskLevel
     });
 
     return jsonResponse(responseDTO);

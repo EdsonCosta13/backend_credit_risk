@@ -1,4 +1,4 @@
-import { quizRoutes } from "./routes/quiz.routes.js";
+import { quizRoutes } from "./quiz.routes.js";
 
 export const QuizModule = {
   routes: quizRoutes

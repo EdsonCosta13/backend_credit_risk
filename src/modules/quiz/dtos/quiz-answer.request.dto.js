@@ -1,7 +1,15 @@
 export class QuizAnswerRequestDTO {
-  constructor({ questionId, answer, score }) {
+  constructor({
+    questionId,
+    answer,
+    currentScore = 0,
+    history = []
+  } = {}) {
     this.questionId = questionId;
-    this.answer = answer;
-    this.score = score;
+    this.answer = typeof answer === "string" ? answer.trim() : "";
+    this.currentScore = Number.isFinite(currentScore) ? currentScore : 0;
+    this.history = Array.isArray(history) || typeof history === "string"
+      ? history
+      : [];
   }
 }

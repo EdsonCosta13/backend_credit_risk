@@ -1,8 +1,7 @@
 export class QuizAnswerResponseDTO {
-  constructor({ id, text, options, riskLevel }) {
-    this.id = id;
-    this.text = text;
-    this.options = options;
-    this.riskLevel = riskLevel;
+  constructor({ nextQuestion, updatedScore, inferredRiskLevel }) {
+    this.nextQuestion = nextQuestion;
+    this.updatedScore = updatedScore;
+    this.inferredRiskLevel = inferredRiskLevel;
   }
 }

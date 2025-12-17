@@ -1,7 +1,11 @@
 export class QuizStartResponseDTO {
-  constructor({ id, text, options }) {
-    this.id = id;
-    this.text = text;
-    this.options = options;
+  constructor({
+    question,
+    initialScore = 0,
+    inferredRiskLevel = "medio"
+  }) {
+    this.question = question;
+    this.initialScore = initialScore;
+    this.inferredRiskLevel = inferredRiskLevel;
   }
 }
