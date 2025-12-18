@@ -6,29 +6,47 @@ import { jsonResponse } from "../../shared/utils/response.util.js";
 
 export const quizController = {
   async start() {
-    const question = await quizService.createInitialQuestion();
+    try {
+      const startPayload = quizService.startSession();
 
-    const responseDTO = new QuizStartResponseDTO({
-      question: question.toJSON(),
-      initialScore: 0,
-      inferredRiskLevel: question.riskLevel
-    });
+      const responseDTO = new QuizStartResponseDTO({
+        sessionId: startPayload.sessionId
+      });
 
-    return jsonResponse(responseDTO);
+      return jsonResponse(responseDTO);
+    } catch (error) {
+      console.error("[quiz] erro ao iniciar quiz:", error);
+      return jsonResponse(
+        { error: error.message ?? "Nao foi possivel iniciar o quiz." },
+        400
+      );
+    }
   },
 
   async answer(request) {
-    const body = await request.json();
-    const requestDTO = new QuizAnswerRequestDTO(body);
+    try {
+      const body = await request.json();
+      const requestDTO = new QuizAnswerRequestDTO(body);
 
-    const serviceResponse = await quizService.processAnswer(requestDTO);
+      const serviceResponse = await quizService.processAnswer(requestDTO);
 
-    const responseDTO = new QuizAnswerResponseDTO({
-      nextQuestion: serviceResponse.nextQuestion.toJSON(),
-      updatedScore: serviceResponse.updatedScore,
-      inferredRiskLevel: serviceResponse.inferredRiskLevel
-    });
+      const responseDTO = new QuizAnswerResponseDTO({
+        nextQuestion: serviceResponse.nextQuestion
+          ? serviceResponse.nextQuestion.toJSON()
+          : null,
+        updatedScore: serviceResponse.updatedScore,
+        inferredRiskLevel: serviceResponse.inferredRiskLevel,
+        remainingQuestions: serviceResponse.remainingQuestions,
+        quizCompleted: serviceResponse.quizCompleted
+      });
 
-    return jsonResponse(responseDTO);
+      return jsonResponse(responseDTO);
+    } catch (error) {
+      console.error("[quiz] erro ao processar resposta:", error);
+      return jsonResponse(
+        { error: error.message ?? "Nao foi possivel processar a resposta do quiz." },
+        400
+      );
+    }
   }
 };

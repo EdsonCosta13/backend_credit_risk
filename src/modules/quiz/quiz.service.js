@@ -3,26 +3,75 @@ import { QuizQuestion } from "./quiz.entity.js";
 const LLAMA_URL = "http://localhost:11434/api/generate";
 const LLAMA_MODEL = "llama3:8b";
 const QUESTION_TTL_MS = 10 * 60 * 1000;
+const MAX_QUESTIONS_PER_SESSION = 20;
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 const questionRegistry = new Map();
+const sessionRegistry = new Map();
 
 export const quizService = {
-  async createInitialQuestion() {
-    const question = await generateQuestion({
-      isInitial: true,
-      currentScore: 0,
-      lastAnswer: "",
-      lastRiskLevel: "medio",
-      historySummary: "Sem respostas anteriores."
-    });
-
-    rememberQuestion(question);
-    return question;
+  startSession() {
+    const session = createSession();
+    return {
+      sessionId: session.id
+    };
   },
 
   async processAnswer(answerDTO) {
+    const session = getSessionOrThrow(answerDTO.sessionId);
+    const isFirstQuestionRequest = session.questionsAsked === 0 && !answerDTO.questionId;
+
+    if (isFirstQuestionRequest) {
+      const question = await generateQuestion({
+        isInitial: true,
+        currentScore: 0,
+        lastAnswer: "",
+        lastRiskLevel: "medio",
+        historySummary: "Sem respostas anteriores."
+      });
+
+      rememberQuestion(question);
+      const updatedSession = registerQuestionForSession(session, question.id);
+
+      return {
+        nextQuestion: question,
+        updatedScore: 0,
+        inferredRiskLevel: question.riskLevel,
+        remainingQuestions: calculateRemainingQuestions(updatedSession),
+        quizCompleted: false
+      };
+    }
+
+    if (!answerDTO.questionId) {
+      throw new Error("O identificador da pergunta e obrigatorio.");
+    }
+
     const previousQuestion = findQuestion(answerDTO.questionId);
+    if (!previousQuestion) {
+      throw new Error("Pergunta fornecida invalida ou expirada.");
+    }
+
     const historySummary = buildHistorySummary(answerDTO.history);
+
+    const updatedScore = calculateScore({
+      currentScore: answerDTO.currentScore,
+      answer: answerDTO.answer,
+      previousQuestion
+    });
+
+    const inferredRiskLevel = inferRiskLevel(updatedScore);
+
+    if (session.questionsAsked >= session.maxQuestions) {
+      session.completed = true;
+      sessionRegistry.set(session.id, session);
+      return {
+        nextQuestion: null,
+        updatedScore,
+        inferredRiskLevel,
+        remainingQuestions: 0,
+        quizCompleted: true
+      };
+    }
 
     const nextQuestion = await generateQuestion({
       isInitial: false,
@@ -33,19 +82,14 @@ export const quizService = {
     });
 
     rememberQuestion(nextQuestion);
-
-    const updatedScore = calculateScore({
-      currentScore: answerDTO.currentScore,
-      answer: answerDTO.answer,
-      previousQuestion
-    });
-
-    const inferredRiskLevel = inferRiskLevel(updatedScore);
+    const updatedSession = registerQuestionForSession(session, nextQuestion.id);
 
     return {
       nextQuestion,
       updatedScore,
-      inferredRiskLevel
+      inferredRiskLevel,
+      remainingQuestions: calculateRemainingQuestions(updatedSession),
+      quizCompleted: false
     };
   }
 };
@@ -302,16 +346,117 @@ function cleanupRegistry() {
   }
 }
 
+function createSession() {
+  cleanupSessions();
+
+  const session = {
+    id: crypto.randomUUID(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    maxQuestions: MAX_QUESTIONS_PER_SESSION,
+    questionsAsked: 0,
+    completed: false
+  };
+
+  sessionRegistry.set(session.id, session);
+  return session;
+}
+
+function getSessionOrThrow(sessionId) {
+  cleanupSessions();
+
+  const session = findSession(sessionId);
+
+  if (!session) {
+    throw new Error("Sessao de quiz invalida ou expirada.");
+  }
+
+  if (session.completed) {
+    throw new Error("Este quiz ja foi finalizado.");
+  }
+
+  return session;
+}
+
+function registerQuestionForSession(session, questionId) {
+  if (!session) {
+    throw new Error("Sessao de quiz invalida ou expirada.");
+  }
+
+  if (session.questionsAsked >= session.maxQuestions) {
+    throw new Error("Limite de perguntas atingido para esta sessao.");
+  }
+
+  session.questionsAsked += 1;
+  session.lastQuestionId = questionId;
+  session.updatedAt = Date.now();
+  sessionRegistry.set(session.id, session);
+  return session;
+}
+
+function calculateRemainingQuestions(session) {
+  if (!session) {
+    return 0;
+  }
+
+  return Math.max(session.maxQuestions - session.questionsAsked, 0);
+}
+
+function findSession(sessionId) {
+  if (!sessionId || !sessionRegistry.has(sessionId)) {
+    return null;
+  }
+
+  const session = sessionRegistry.get(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+    sessionRegistry.delete(sessionId);
+    return null;
+  }
+
+  return session;
+}
+
+function cleanupSessions() {
+  const now = Date.now();
+
+  for (const [id, session] of sessionRegistry.entries()) {
+    if (now - session.createdAt > SESSION_TTL_MS) {
+      sessionRegistry.delete(id);
+    }
+  }
+}
+
 const BASE_PROMPT = `
-Voce e um consultor financeiro especializado em avaliar o risco de credito de clientes.
-Gere apenas UMA pergunta por vez, focada em entendimento de objectivos financeiros, capacidade de pagamento e tolerancia ao risco.
-Responda unicamente com JSON valido no formato:
+Voce e um analista financeiro especializado em avaliacao de confianca para concessao de credito.
+O seu objectivo e avaliar se um cliente demonstra condicoes suficientes para obter credito de forma responsavel.
+
+A avaliacao deve considerar:
+- Capacidade e estabilidade de pagamento
+- Comportamento financeiro e disciplina
+- Clareza na finalidade do credito
+- Planeamento e tolerancia ao risco
+
+REGRAS OBRIGATORIAS:
+- Gere APENAS UMA pergunta por vez
+- A pergunta DEVE ser adaptada com base na resposta anterior e no historico fornecido
+- A pergunta deve aprofundar o entendimento do perfil do cliente
+- Use exclusivamente portugues de Portugal
+- Linguagem clara, formal e adequada ao sector financeiro
+- Nao utilize termos em ingles
+- Nao forneca explicacoes fora do JSON
+
+Responda SEMPRE com JSON valido exactamente no seguinte formato:
 {
-  "question": "texto claro e objectivo",
+  "question": "texto claro, objectivo e profissional",
   "options": ["opcao A", "opcao B", "opcao C"],
   "riskLevel": "baixo|medio|alto"
 }
 `;
+
 
 function buildPrompt({
   isInitial,
@@ -322,20 +467,37 @@ function buildPrompt({
 }) {
   if (isInitial) {
     return `${BASE_PROMPT}
-Contexto: cliente iniciando avaliacao de risco de credito.
-Score acumulado: 0.
-Historico: sem respostas anteriores.
-Objetivo: formular a primeira pergunta que combine finalidade do credito e tolerancia ao risco.
-`;
+  Contexto:
+  O cliente esta a iniciar um processo de avaliacao de confianca para concessao de credito.
+  Ainda nao existem respostas anteriores.
+  Score actual: 0.
+  
+  Objectivo da pergunta:
+  Compreender a finalidade do credito e o grau inicial de planeamento financeiro do cliente.
+  `;
   }
+  
 
   return `${BASE_PROMPT}
-Contexto actualizado:
-- Score actual: ${currentScore}
-- Ultimo nivel de risco analisado: ${lastRiskLevel}
-- Ultima resposta fornecida: ${lastAnswer || "nao informado"}
-- Historico resumido:
-${historySummary}
-
-Formule a proxima pergunta mantendo o foco em risco de credito e adaptando o nivel de dificuldade conforme o perfil identificado.`;
+  Contexto actualizado da avaliacao de credito:
+  
+  - Score actual do cliente: ${currentScore}
+  - Nivel de risco previamente identificado: ${lastRiskLevel}
+  - Ultima resposta fornecida pelo cliente: "${lastAnswer || "nao informado"}"
+  
+  Resumo do historico de respostas:
+  ${historySummary}
+  
+  Instrucao:
+  Com base DIRECTA na ultima resposta e no historico acima,
+  formule a PROXIMA pergunta de forma adaptativa.
+  
+  A pergunta deve:
+  - Explorar um novo aspecto relevante para confianca de concessao de credito
+  - Ajustar a profundidade conforme o perfil identificado
+  - Ajudar a confirmar ou refinar o nivel de risco actual
+  
+  Nao repita perguntas anteriores.
+  `;
+  
 }
