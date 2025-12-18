@@ -4,12 +4,14 @@ export class QuizAnswerResponseDTO {
     updatedScore,
     inferredRiskLevel,
     remainingQuestions = 0,
-    quizCompleted = false
+    quizCompleted = false,
+    evaluationSummary = null
   }) {
     this.nextQuestion = nextQuestion;
     this.updatedScore = updatedScore;
     this.inferredRiskLevel = inferredRiskLevel;
     this.remainingQuestions = remainingQuestions;
     this.quizCompleted = quizCompleted;
+    this.evaluationSummary = evaluationSummary;
   }
 }

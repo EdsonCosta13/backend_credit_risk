@@ -38,7 +38,8 @@ export const quizService = {
         updatedScore: 0,
         inferredRiskLevel: question.riskLevel,
         remainingQuestions: calculateRemainingQuestions(updatedSession),
-        quizCompleted: false
+        quizCompleted: false,
+        evaluationSummary: null
       };
     }
 
@@ -64,12 +65,20 @@ export const quizService = {
     if (session.questionsAsked >= session.maxQuestions) {
       session.completed = true;
       sessionRegistry.set(session.id, session);
+      const evaluationSummary = buildEvaluationSummary({
+        history: answerDTO.history,
+        finalScore: updatedScore,
+        riskLevel: inferredRiskLevel,
+        lastAnswer: answerDTO.answer
+      });
+
       return {
         nextQuestion: null,
         updatedScore,
         inferredRiskLevel,
         remainingQuestions: 0,
-        quizCompleted: true
+        quizCompleted: true,
+        evaluationSummary
       };
     }
 
@@ -89,7 +98,8 @@ export const quizService = {
       updatedScore,
       inferredRiskLevel,
       remainingQuestions: calculateRemainingQuestions(updatedSession),
-      quizCompleted: false
+      quizCompleted: false,
+      evaluationSummary: null
     };
   }
 };
@@ -428,6 +438,81 @@ function cleanupSessions() {
       sessionRegistry.delete(id);
     }
   }
+}
+
+function buildEvaluationSummary({ history, finalScore, riskLevel, lastAnswer }) {
+  const normalizedHistory = appendLatestAnswer(history, {
+    answer: lastAnswer,
+    score: finalScore,
+    riskLevel
+  });
+
+  return {
+    finalScore,
+    inferredRiskLevel: riskLevel,
+    historySummary: buildHistorySummary(normalizedHistory),
+    recommendations: generateRecommendations(riskLevel, finalScore)
+  };
+}
+
+function appendLatestAnswer(history, latest) {
+  if (!latest?.answer) {
+    return history;
+  }
+
+  if (Array.isArray(history)) {
+    return [
+      ...history,
+      {
+        question: latest.question ?? "Ultima interaccao",
+        answer: latest.answer,
+        score: latest.score,
+        riskLevel: latest.riskLevel
+      }
+    ];
+  }
+
+  if (typeof history === "string") {
+    return `${history}\n- Ultima resposta: ${latest.answer} | Score: ${latest.score} | Risco: ${latest.riskLevel}`;
+  }
+
+  return [
+    {
+      question: "Ultima interaccao",
+      answer: latest.answer,
+      score: latest.score,
+      riskLevel: latest.riskLevel
+    }
+  ];
+}
+
+function generateRecommendations(riskLevel, score) {
+  const recommendations = [];
+
+  if (riskLevel === "alto") {
+    recommendations.push(
+      "Reforce provas de capacidade de pagamento e apresente garantias adicionais.",
+      "Considere reduzir o montante solicitado ou alongar prazos para mitigar risco."
+    );
+  } else if (riskLevel === "medio") {
+    recommendations.push(
+      "Mantenha registos de fluxo de caixa e detalhe como pretende utilizar o credito.",
+      "Prepare documentação que demonstre estabilidade financeira recente."
+    );
+  } else {
+    recommendations.push(
+      "Continue a evidenciar disciplina financeira e reservas para imprevistos.",
+      "Avalie produtos de credito com taxas competitivas e condições flexiveis."
+    );
+  }
+
+  if (score < 40) {
+    recommendations.push("Reveja compromissos existentes para reduzir endividamento antes de contratar novo credito.");
+  } else if (score > 70) {
+    recommendations.push("Perfil indica boa capacidade; avalie negociar condições mais vantajosas junto à instituição.");
+  }
+
+  return recommendations;
 }
 
 const BASE_PROMPT = `

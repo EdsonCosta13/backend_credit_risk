@@ -37,7 +37,8 @@ export const quizController = {
         updatedScore: serviceResponse.updatedScore,
         inferredRiskLevel: serviceResponse.inferredRiskLevel,
         remainingQuestions: serviceResponse.remainingQuestions,
-        quizCompleted: serviceResponse.quizCompleted
+        quizCompleted: serviceResponse.quizCompleted,
+        evaluationSummary: serviceResponse.evaluationSummary
       });
 
       return jsonResponse(responseDTO);
